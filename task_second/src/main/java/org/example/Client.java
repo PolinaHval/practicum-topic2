@@ -6,30 +6,40 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 
 public class Client {
   public static void main(String[] args) {
 
-    try (Socket socket = new Socket("localhost", 11111);
-         BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-         BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
-         BufferedReader console = new BufferedReader(new InputStreamReader(System.in))) {
+    try (Socket socket = new Socket("localhost", 11111)) {
 
-      String userInput;
-      while ((userInput = console.readLine()) != null) {
-        out.write(userInput + "\n");
-        out.flush();
+      socket.setSoTimeout(5000);
 
-        String response = in.readLine();
-        System.out.println("Ответ: " + response);
+      try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+           BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
+           BufferedReader console = new BufferedReader(new InputStreamReader(System.in))) {
 
-        if ("exit".equalsIgnoreCase(userInput)) {
-          break;
+        String userInput;
+        while ((userInput = console.readLine()) != null) {
+          out.write(userInput + "\n");
+          out.flush();
+
+          try {
+            String response = in.readLine();
+            System.out.println("Ответ: " + response);
+          } catch (SocketTimeoutException e) {
+            System.err.println("Время ожидания ответа сервера истекло");
+          }
+
+          if ("exit".equalsIgnoreCase(userInput)) {
+            break;
+          }
         }
+
       }
 
     } catch (IOException e) {
-      e.printStackTrace();
+      System.err.println("Ошибка при подключении или работе с сокетом: " + e.getMessage());
     }
   }
 }

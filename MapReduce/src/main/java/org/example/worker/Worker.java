@@ -21,7 +21,6 @@ public class Worker implements Runnable{
   private final Mapper mapper;
   private final Reducer reducer;
 
-
   public Worker(int id, Coordinator coordinator, Mapper mapper, Reducer reducer) {
     this.id = id;
     this.coordinator = coordinator;
@@ -45,14 +44,16 @@ public class Worker implements Runnable{
         continue;
       }
 
-      if (task instanceof MapTask) {
-        MapTask mapTask = (MapTask) task;
-        handleMapTask(mapTask);
-        coordinator.notifyMapDone(mapTask.taskId);
-      } else if (task instanceof ReduceTask) {
-        ReduceTask reduceTask = (ReduceTask) task;
-        handleReduceTask(reduceTask);
-        coordinator.notifyReduceDone(reduceTask.reduceId);
+      try {
+        if (task instanceof MapTask mapTask) {
+          handleMapTask(mapTask);
+          coordinator.notifyMapDone(mapTask.taskId);
+        } else if (task instanceof ReduceTask reduceTask) {
+          handleReduceTask(reduceTask);
+          coordinator.notifyReduceDone(reduceTask.reduceId);
+        }
+      } catch (Exception e) {
+        System.err.println("Worker " + id + " ошибка при выполнении задачи: " + e.getMessage());
       }
     }
   }
@@ -77,7 +78,6 @@ public class Worker implements Runnable{
 
   private void handleReduceTask(ReduceTask task) {
     List<KeyValue> all = new ArrayList<>();
-
     for (String file : task.inputFiles) {
       all.addAll(FileUtil.readKeyValueList(file));
     }

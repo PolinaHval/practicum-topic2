@@ -7,8 +7,10 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class Server {
   private static final int PORT = 11111;
@@ -16,27 +18,56 @@ public class Server {
 
   public static void main(String[] args) {
     ExecutorService executorService = Executors.newFixedThreadPool(maxThread);
-    System.out.println("Сервер запущен. Порт: " + PORT);
+    ServerSocket serverSocket = null;
 
-    try (ServerSocket serverSocket = new ServerSocket(PORT)) {
+    try {
+      serverSocket = new ServerSocket(PORT);
+      serverSocket.setSoTimeout(5000);
+      System.out.println("Сервер запущен. Порт: " + PORT);
 
-      while (true) {
-        Socket clientSocket = serverSocket.accept();
-        System.out.println("Клиент подключился: " + clientSocket.getInetAddress());
+      while (!Thread.currentThread().isInterrupted()) {
+        try {
+          Socket clientSocket = serverSocket.accept();
+          System.out.println("Клиент подключился: " + clientSocket.getInetAddress());
 
-        executorService.submit(() -> handleClient(clientSocket));
+          executorService.submit(() -> handleClient(clientSocket));
+
+        } catch (SocketTimeoutException e) {
+        }
       }
 
     } catch (IOException e) {
-      e.printStackTrace();
+      System.err.println("Ошибка сервера: " + e.getMessage());
     } finally {
+      if (serverSocket != null && !serverSocket.isClosed()) {
+        try {
+          serverSocket.close();
+        } catch (IOException e) {
+          System.err.println("Не удалось закрыть серверный сокет: " + e.getMessage());
+        }
+      }
+
       executorService.shutdown();
+      try {
+        if (!executorService.awaitTermination(10, TimeUnit.SECONDS)) {
+          executorService.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        executorService.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+
+      System.out.println("Сервер завершил работу");
     }
   }
 
   private static void handleClient(Socket socket) {
-    try (BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-         BufferedWriter out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()))){
+    BufferedReader in = null;
+    BufferedWriter out = null;
+
+    try {
+      in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+      out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
 
       String inputLine;
       while ((inputLine = in.readLine()) != null) {
@@ -52,12 +83,24 @@ public class Server {
       System.out.println("Клиент отключился: " + socket.getInetAddress());
 
     } catch (IOException e) {
-      e.printStackTrace();
+      System.err.println("Ошибка работы с клиентом: " + e.getMessage());
     } finally {
       try {
-        socket.close();
+        if (in != null) in.close();
       } catch (IOException e) {
-        e.printStackTrace();
+        System.err.println("Не удалось закрыть InputStream: " + e.getMessage());
+      }
+
+      try {
+        if (out != null) out.close();
+      } catch (IOException e) {
+        System.err.println("Не удалось закрыть OutputStream: " + e.getMessage());
+      }
+
+      try {
+        if (socket != null && !socket.isClosed()) socket.close();
+      } catch (IOException e) {
+        System.err.println("Не удалось закрыть сокет: " + e.getMessage());
       }
     }
   }

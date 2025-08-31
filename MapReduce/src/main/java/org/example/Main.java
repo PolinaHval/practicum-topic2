@@ -19,7 +19,7 @@ public class Main {
     List<Thread> workers = new ArrayList<>();
     for (int i = 0; i < numWorkers; i++) {
       Worker worker = new Worker(i, coordinator, new WordCountMapper(), new WordCountReducer());
-      Thread thread = new Thread(worker);
+      Thread thread = new Thread(worker, "Worker-" + i);
       thread.start();
       workers.add(thread);
     }
@@ -29,9 +29,12 @@ public class Main {
         t.join();
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
+        System.out.println("Главный поток прерван, завершаем");
+        return;
       }
     }
 
     System.out.println("MapReduce завершён");
+    coordinator.shutdown();
   }
 }
